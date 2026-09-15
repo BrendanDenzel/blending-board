@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Blending Board</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@500;600;700&family=Nunito:wght@700;800;900&family=Comic+Neue:wght@700;800&family=Baloo+2:wght@700;800&family=Fredoka:wght@600;700&family=Patrick+Hand&family=Architects+Daughter&display=swap" rel="stylesheet">
+<style>
+:root{
+    --bg: #EFF6EC;
+    --card: #78B26A;
+    --card-text: #1E3A16;
+    --slot: #A9CE9E;
+    --ink: #233B2E;
+    --panel: #FFFFFF;
+    --panel-ink: #2B2B2B;
+    --letter-font: 'Nunito', system-ui, sans-serif;
+    --letter-weight: 900;
+    --bank-align: flex-start;
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+  }
+  *{ box-sizing: border-box; }
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    font-family:'Quicksand', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    -webkit-user-select:none; user-select:none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #app{
+    position:fixed; inset:0;
+    display:flex; flex-direction:column;
+    height: 100dvh; width:100dvw;
+    background: var(--bg);
+    transition: background 0.35s ease;
+    padding-top: var(--safe-top);
+    padding-left: var(--safe-left);
+    padding-right: var(--safe-right);
+  }
+
+  /* ---------- Top bar ---------- */
+  #topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 10px 14px;
+    flex: 0 0 auto;
+    z-index: 20;
+  }
+  #topbar h1{
+    font-size: clamp(15px, 2.4vw, 22px);
+    font-weight:700;
+    margin:0;
+    color: var(--ink);
+    letter-spacing:0.2px;
+    opacity:0.85;
+  }
+  .icon-btn{
+    display:inline-flex; align-items:center; justify-content:center;
+    width: 44px; height:44px;
+    border-radius: 14px;
+    border: none;
+    background: rgba(255,255,255,0.55);
+    cursor:pointer;
+    color: var(--ink);
+    touch-action: manipulation;
+    transition: transform 0.12s ease, background 0.2s ease;
+    flex: 0 0 auto;
+  }
+  .icon-btn:active{ transform: scale(0.90); background: rgba(255,255,255,0.85); }
+  .icon-btn svg{ width:22px; height:22px; }
+  #topRightGroup{ display:flex; gap:8px; }
+
+  /* ---------- Board ---------- */
+  #boardWrap{
+    flex: 1 1 auto;
+    min-height: 0;
+    display:flex; align-items:center; justify-content:center;
+    padding: 6px 10px;
+    overflow: auto;
+  }
+  #boardArea{
+    display:flex; flex-wrap:wrap;
+    align-items:center; justify-content:center;
+    gap: clamp(6px, 1.4vw, 14px);
+    max-width: 100%;
+    padding: 10px;
+  }
+  .slot{
+    width: var(--tile-w, 62px);
+    height: var(--tile-h, 86px);
+    border-radius: 12px;
+    border: 3px dashed var(--slot);
+    background: rgba(255,255,255,0.18);
+    flex: 0 0 auto;
+    position: relative;
+    transition: border-color 0.15s ease, background 0.15s ease, transform 0.1s ease;
+  }
+  .slot.hot{
+    border-color: var(--card);
+    background: rgba(255,255,255,0.4);
+    transform: scale(1.04);
+  }
+  .slot.filled{ border-style: solid; border-color: transparent; }
+  .slot .card{
+    position: absolute;
+    inset: -3px;
+    width: auto;
+    height: auto;
+  }
+
+  /* ---------- Letter cards ---------- */
+  .card{
+    width: var(--tile-w, 62px);
+    height: var(--tile-h, 86px);
+    border-radius: 12px;
+    background: var(--card);
+    color: var(--card-text);
+    display:flex; align-items:center; justify-content:center;
+    font-family: var(--letter-font);
+    font-weight: var(--letter-weight);
+    font-size: clamp(20px, 4vw, 34px);
+    box-shadow: 0 3px 0 rgba(0,0,0,0.14), 0 6px 14px rgba(0,0,0,0.12);
+    cursor: grab;
+    touch-action: none;
+    flex: 0 0 auto;
+    position: relative;
+    z-index: 1;
+    transition: box-shadow 0.15s ease;
+  }
+  .card.dragging{
+    position: fixed;
+    z-index: 1000;
+    cursor: grabbing;
+    box-shadow: 0 10px 22px rgba(0,0,0,0.28);
+    transition: none;
+    pointer-events: none;
+  }
+  .card .sub{
+    position:absolute; bottom:4px; right:6px;
+    font-size:9px; font-weight:700; opacity:0.35;
+  }
+
+  /* ---------- Duplicate letter count badge ---------- */
+  .stack-badge{
+    position: absolute;
+    bottom: 4px; right: 4px;
+    min-width: 26px; height: 26px;
+    padding: 0 6px;
+    border-radius: 13px;
+    background: rgba(0,0,0,0.65);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  /* ---------- Letter bank ---------- */
+  #bankWrap{
+    flex: 0 0 auto;
+    background: rgba(255,255,255,0.35);
+    backdrop-filter: blur(6px);
+    padding: 10px 10px calc(10px + var(--safe-bottom));
+    border-top: 2px solid rgba(255,255,255,0.5);
+  }
+  #bankLabel{
+    font-size:11px; font-weight:700; text-transform:none;
+    color: var(--label-color, #666);
+    margin: 0 4px 6px; letter-spacing:0.2px;
+    transition: margin-left 0.15s ease, color 0.2s ease;
+  }
+  #letterBank{
+    display:flex; flex-wrap:wrap; gap:10px;
+    justify-content: var(--bank-align, flex-start);
+    overflow-x:hidden; overflow-y:hidden;
+    padding: 2px 4px 6px;
+    scroll-behavior:smooth;
+    transition: height 0.15s ease;
+  }
+  #letterBank::-webkit-scrollbar{ height:6px; width:6px; }
+  #letterBank::-webkit-scrollbar-thumb{ background: rgba(0,0,0,0.15); border-radius:4px; }
+  #letterBank .empty-msg{
+    font-size:13px; opacity:0.5; padding: 20px 8px; font-weight:600;
+  }
+
+  /* ---------- Present mode ---------- */
+  body.present #topbar{ display:none; }
+  body.present #bankWrap{ padding-bottom: calc(14px + var(--safe-bottom)); }
+  #floatBar{
+    position: fixed;
+    top: calc(12px + var(--safe-top));
+    right: calc(12px + var(--safe-right));
+    display:none;
+    gap:8px;
+    z-index: 50;
+  }
+  body.present #floatBar{ display:flex; }
+  #floatBar .icon-btn{ background: rgba(255,255,255,0.65); }
+
+  /* ---------- Overlay & panel ---------- */
+  #overlay{
+    position:fixed; inset:0; background: rgba(20,20,20,0.35);
+    z-index: 90; opacity:0; pointer-events:none; transition: opacity 0.25s ease;
+  }
+  #overlay.show{ opacity:1; pointer-events:auto; }
+
+  #settingsPanel{
+    position:fixed; top:0; right:0; height:100%;
+    width: min(380px, 92vw);
+    background: var(--panel);
+    color: var(--panel-ink);
+    z-index: 95;
+    box-shadow: -8px 0 30px rgba(0,0,0,0.18);
+    transform: translateX(105%);
+    transition: transform 0.3s cubic-bezier(.4,0,.2,1);
+    display:flex; flex-direction:column;
+    padding-top: var(--safe-top);
+  }
+  #settingsPanel.show{ transform: translateX(0); }
+  #settingsPanel .sp-header{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 16px 18px 10px;
+    flex:0 0 auto;
+  }
+  #settingsPanel .sp-header h2{ margin:0; font-size:18px; font-weight:700; }
+  #settingsPanel .icon-btn{ color: var(--panel-ink); }
+  #settingsPanel .sp-body{
+    flex:1 1 auto; overflow-y:auto; padding: 4px 18px 24px;
+  }
+  .sp-section{ margin-bottom: 26px; }
+  .sp-section label.sp-title{
+    display:block; font-size:13px; font-weight:700; margin-bottom:8px; color:#444;
+  }
+  .sp-hint{ font-size:12px; color:#8a8a8a; margin: -4px 0 10px; line-height:1.4; }
+  #letterInput{
+    width:100%; padding:10px 12px; border-radius:10px;
+    border: 2px solid #e4e4e4; font-size:15px; font-family:inherit;
+    outline:none; transition: border-color 0.15s ease;
+  }
+  #letterInput:focus{ border-color: var(--card); }
+  #numBoxes{
+    width:80px; padding:8px 10px; border-radius:10px;
+    border:2px solid #e4e4e4; font-size:15px; font-family:inherit; outline:none;
+  }
+  .row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .btn{
+    border:none; border-radius:10px; padding:10px 16px;
+    font-family:inherit; font-weight:700; font-size:14px;
+    cursor:pointer; transition: transform 0.1s ease, filter 0.15s ease;
+  }
+  .btn:active{ transform: scale(0.96); }
+  .btn-primary{ background: var(--card); color: var(--card-text); border: 2px solid rgba(0,0,0,0.08); }
+  .btn-primary:hover{ filter:brightness(1.05); }
+  .btn-ghost{ background:#f2f2f2; color:#333; }
+  .btn-danger{ background:#fdeceb; color:#c2402d; }
+  .btn-block{ width:100%; }
+
+  .swatch-grid{ display:grid; grid-template-columns: repeat(3,1fr); gap:10px; }
+  .swatch{
+    border-radius: 12px; padding: 10px 8px; cursor:pointer;
+    border: 2px solid transparent; text-align:center;
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+  }
+  .swatch.selected{ border-color: #333; }
+  .swatch .dot-row{ display:flex; gap:4px; }
+  .swatch .dot{ width:14px; height:14px; border-radius:50%; }
+  .swatch span{ font-size:11px; font-weight:700; color:#555; }
+
+  .color-row{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .color-row span{ font-size:13px; font-weight:600; color:#555; }
+  input[type=color]{
+    width:38px; height:32px; border:none; border-radius:8px; padding:0;
+    background:none; cursor:pointer;
+  }
+  input[type=range]{
+    width:100%; accent-color: var(--card);
+  }
+
+  hr.sp-div{ border:none; border-top:1px solid #eee; margin: 18px 0; }
+
+  /* ---------- Confirm modal ---------- */
+  #confirmModal{
+    position:fixed; inset:0; z-index:110;
+    display:none; align-items:center; justify-content:center;
+    padding: 20px;
+    background: rgba(20,20,20,0.4);
+  }
+  #confirmModal.show{ display:flex; }
+  .modal-box{
+    background:#fff; border-radius:16px; padding:22px 22px 18px;
+    max-width: 340px; width:100%;
+    box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+    text-align:center;
+  }
+  .modal-box p{ font-size:15px; color:#333; line-height:1.45; margin: 0 0 18px; font-weight:600; }
+  .modal-actions{ display:flex; gap:10px; }
+  .modal-actions .btn{ flex:1; }
+
+  @media (max-width: 480px){
+    .swatch-grid{ grid-template-columns: repeat(2,1fr); }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="topbar">
+    <h1>Blending Board</h1>
+    <div id="topRightGroup">
+      <button class="icon-btn" id="clearBtnMain" title="Send letters back to the bank" aria-label="Clear board">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+      </button>
+      <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+      </button>
+      <button class="icon-btn" id="presentBtn" title="Present" aria-label="Present mode">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3"></path><path d="M21 8V5a2 2 0 0 0-2-2h-3"></path><path d="M3 16v3a2 2 0 0 0 2 2h3"></path><path d="M16 21h3a2 2 0 0 0 2-2v-3"></path></svg>
+      </button>
+    </div>
+  </div>
+
+  <div id="boardWrap">
+    <div id="boardArea"></div>
+  </div>
+
+  <div id="bankWrap">
+    <div id="bankLabel">Letter bank — drag onto the board</div>
+    <div id="letterBank"></div>
+  </div>
+</div>
+
+<div id="floatBar">
+  <button class="icon-btn" id="clearBtn" title="Send letters back to the bank" aria-label="Clear board">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+  </button>
+  <button class="icon-btn" id="floatSettingsBtn" title="Settings" aria-label="Settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+  </button>
+  <button class="icon-btn" id="exitPresentBtn" title="Exit present mode" aria-label="Exit present mode">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3H5a2 2 0 0 0-2 2v4"></path><path d="M15 3h4a2 2 0 0 1 2 2v4"></path><path d="M9 21H5a2 2 0 0 1-2-2v-4"></path><path d="M15 21h4a2 2 0 0 0 2-2v-4"></path></svg>
+  </button>
+</div>
+
+<div id="overlay"></div>
+
+<div id="settingsPanel">
+  <div class="sp-header">
+    <h2>Settings</h2>
+    <button class="icon-btn" id="closeSettingsBtn" aria-label="Close settings">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </button>
+  </div>
+  <div class="sp-body">
+
+    <div class="sp-section">
+      <label class="sp-title" for="letterInput">Activity letters</label>
+      <div class="sp-hint">Type letters or word groups. Separate with commas for blends like sh, ch, th — or just type a word to split it into single letters.</div>
+      <input type="text" id="letterInput" placeholder="e.g. c, a, t, sh, ch">
+      <div class="row" style="margin-top:10px;">
+        <button class="btn btn-primary" id="applyLettersBtn">Update letter bank</button>
+      </div>
+      <button class="btn btn-ghost btn-block" id="stackToggleBtn" style="margin-top:10px;">Turn on Letter Stacking</button>
+    </div>
+
+    <div class="sp-section">
+      <label class="sp-title" for="numBoxes">Number of boxes on the board</label>
+      <div class="row">
+        <input type="number" id="numBoxes" min="1" max="30" value="6">
+        <button class="btn btn-ghost" id="applyBoxesBtn">Update</button>
+      </div>
+    </div>
+
+    <div class="sp-section">
+      <label class="sp-title" for="cardSize">Card size</label>
+      <div class="row">
+        <input type="range" id="cardSize" min="0.7" max="1.8" step="0.05" value="1" style="flex:1;">
+      </div>
+    </div>
+
+    <div class="sp-section">
+      <label class="sp-title">Letter bank alignment</label>
+      <div class="row" id="bankAlignRow">
+        <button class="btn btn-ghost" data-align="flex-start" style="flex:1;">Left</button>
+        <button class="btn btn-ghost" data-align="center" style="flex:1;">Center</button>
+        <button class="btn btn-ghost" data-align="flex-end" style="flex:1;">Right</button>
+      </div>
+    </div>
+
+    <hr class="sp-div">
+
+    <div class="sp-section">
+      <label class="sp-title">Color themes</label>
+      <div class="swatch-grid" id="presetGrid"></div>
+      <button class="btn btn-ghost btn-block" id="cvToggleBtn" style="margin-top:10px;">Turn on Consonant &amp; Vowel Coloring</button>
+    </div>
+
+    <div class="sp-section">
+      <label class="sp-title">Letter style</label>
+      <div class="swatch-grid" id="fontGrid"></div>
+    </div>
+
+    <hr class="sp-div">
+
+    <div class="sp-section">
+      <button class="btn btn-danger btn-block" id="removeAllBtn" style="margin-bottom:10px;">Remove all letters</button>
+      <button class="btn btn-ghost btn-block" id="resetAllBtn">Reset all settings</button>
+    </div>
+
+  </div>
+</div>
+
+<div id="confirmModal">
+  <div class="modal-box">
+    <p id="confirmText">Would you like to continue with your saved letters?</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="confirmNo">No</button>
+      <button class="btn btn-primary" id="confirmYes">Yes</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- Storage keys ---------------- */
+  const K_COLORS = 'lwb_colors_v1';
+  const K_STATE  = 'lwb_state_v1'; // { letters: [{id,char}], numBoxes, placements: {slotIndex: letterId} }
+
+  /* ---------------- Presets ---------------- */
+    const PRESETS = [
+    { name:'Forest',    bg:'#EFF6EC', card:'#78B26A', slot:'#A9CE9E', cv:{consonant:'#3F7A34', vowel:'#C1341F'} },
+    { name:'Sunshine',  bg:'#FFF6E0', card:'#FFC94D', slot:'#F2C57C', text:'#ffffff', cv:{consonant:'#2F7A34', vowel:'#B02E1E'} },
+    { name:'Ocean',     bg:'#E7F6F8', card:'#4FB6C9', slot:'#8FD3E0', text:'#ffffff', cv:{consonant:'#2F6B45', vowel:'#A3301C'} },
+    { name:'Midnight',  bg:'#2C3E66', card:'#FFFFFF', slot:'#8FA5C7', cv:{consonant:'#4E9F63', vowel:'#C1341F'} },
+    { name:'Slate',     bg:'#425066', card:'#FFFFFF', slot:'#9FB0C2', cv:{consonant:'#42a15a', vowel:'#bf1815'} },
+    { name:'Ember',     bg:'#3A2318', card:'#FFFFFF', slot:'#C9A98B', cv:{consonant:'#4E9463', vowel:'#B5321C'} },
+  ];
+
+  const FONTS = [
+    { name:'Nunito',        family:"'Nunito', system-ui, sans-serif",        weight:900 },
+    { name:'Comic Sans',    family:"'Comic Sans MS', 'Comic Sans', cursive", weight:700 },
+    { name:'Comic Neue',    family:"'Comic Neue', cursive",                  weight:800 },
+    { name:'Baloo',         family:"'Baloo 2', cursive",                     weight:700 },
+    { name:'Fredoka',       family:"'Fredoka', sans-serif",                  weight:600 },
+    { name:'Handwriting',   family:"'Patrick Hand', cursive",                weight:400 },
+  ];
+
+  /* ---------------- State ---------------- */
+  let state = {
+    letters: [],       // {id, char}
+    numBoxes: 6,
+    placements: {},     // slotIndex -> letterId
+    bankOrder: [],       // ids of letters currently in the bank, in display order
+    colors: { bg: PRESETS[0].bg, card: PRESETS[0].card, slot: PRESETS[0].slot, preset: 'Forest', font: 'Nunito', cardScale: 1, cvMode:false, consonant: PRESETS[0].cv.consonant, vowel: PRESETS[0].cv.vowel, bankAlign: 'flex-start', stackMode: true }
+  };
+
+  let idCounter = 1;
+  function nextId(){ return 'l' + (idCounter++); }
+
+  /* ---------------- DOM refs ---------------- */
+  const app = document.getElementById('app');
+  const boardArea = document.getElementById('boardArea');
+  const letterBank = document.getElementById('letterBank');
+  const settingsPanel = document.getElementById('settingsPanel');
+  const overlay = document.getElementById('overlay');
+  const letterInput = document.getElementById('letterInput');
+  const numBoxesInput = document.getElementById('numBoxes');
+  const cardSizeInput = document.getElementById('cardSize');
+  const presetGrid = document.getElementById('presetGrid');
+  const fontGrid = document.getElementById('fontGrid');
+  const cvToggleBtn = document.getElementById('cvToggleBtn');
+  const stackToggleBtn = document.getElementById('stackToggleBtn');
+  const confirmModal = document.getElementById('confirmModal');
+  const bankLabel = document.getElementById('bankLabel');
+  const bankAlignRow = document.getElementById('bankAlignRow');
+
+  /* ---------------- Utility: contrast text color ---------------- */
+  function readableText(hex){
+    const c = hex.replace('#','');
+    const r = parseInt(c.substring(0,2),16), g = parseInt(c.substring(2,4),16), b = parseInt(c.substring(4,6),16);
+    const lum = (0.299*r + 0.587*g + 0.114*b) / 255;
+    return lum > 0.6 ? '#26321f' : '#ffffff';
+  }
+
+  function applyColors(){
+    document.documentElement.style.setProperty('--bg', state.colors.bg);
+    document.documentElement.style.setProperty('--card', state.colors.card);
+    document.documentElement.style.setProperty('--slot', state.colors.slot);
+    document.documentElement.style.setProperty('--card-text', state.colors.text || readableText(state.colors.card));
+    document.documentElement.style.setProperty('--ink', readableText(state.colors.bg) === '#ffffff' ? '#f2f2f2' : '#26321f');
+    document.documentElement.style.setProperty('--label-color', readableText(state.colors.bg) === '#ffffff' ? '#cbcbcb' : '#6B6B6B');
+    const fontObj = FONTS.find(f=>f.name === state.colors.font) || FONTS[0];
+    document.documentElement.style.setProperty('--letter-font', fontObj.family);
+    document.documentElement.style.setProperty('--letter-weight', fontObj.weight);
+    cardSizeInput.value = state.colors.cardScale || 1;
+    cvToggleBtn.textContent = state.colors.cvMode ? 'Turn off Consonant & Vowel Coloring' : 'Turn on Consonant & Vowel Coloring';
+    cvToggleBtn.classList.toggle('btn-primary', !!state.colors.cvMode);
+    cvToggleBtn.classList.toggle('btn-ghost', !state.colors.cvMode);
+    stackToggleBtn.textContent = state.colors.stackMode ? 'Turn off Letter Stacking' : 'Turn on Letter Stacking';
+    stackToggleBtn.classList.toggle('btn-primary', !!state.colors.stackMode);
+    stackToggleBtn.classList.toggle('btn-ghost', !state.colors.stackMode);
+    document.documentElement.style.setProperty('--bank-align', state.colors.bankAlign || 'flex-start');
+    [...bankAlignRow.children].forEach(btn=>{
+      const active = btn.dataset.align === (state.colors.bankAlign || 'flex-start');
+      btn.classList.toggle('btn-primary', active);
+      btn.classList.toggle('btn-ghost', !active);
+    });
+    highlightPreset();
+    computeTileSize();
+    layoutBank();
+  }
+
+  function highlightPreset(){
+    [...presetGrid.children].forEach(el=>{
+      el.classList.toggle('selected', el.dataset.name === state.colors.preset);
+    });
+    [...fontGrid.children].forEach(el=>{
+      el.classList.toggle('selected', el.dataset.name === (state.colors.font || 'Nunito'));
+    });
+  }
+
+  function buildFontGrid(){
+    fontGrid.innerHTML = '';
+    FONTS.forEach(f=>{
+      const el = document.createElement('div');
+      el.className = 'swatch';
+      el.dataset.name = f.name;
+      el.innerHTML = `<span style="font-family:${f.family}; font-weight:${f.weight}; font-size:15px; color:#333;">Aa</span><span>${f.name}</span>`;
+      el.addEventListener('click', ()=>{
+        state.colors = { ...state.colors, font: f.name };
+        applyColors();
+        saveColors();
+      });
+      fontGrid.appendChild(el);
+    });
+  }
+
+  function buildPresetGrid(){
+    presetGrid.innerHTML = '';
+    PRESETS.forEach(p=>{
+      const el = document.createElement('div');
+      el.className = 'swatch';
+      el.dataset.name = p.name;
+      el.innerHTML = `<div class="dot-row">
+          <div class="dot" style="background:${p.bg}"></div>
+          <div class="dot" style="background:${p.card}"></div>
+          <div class="dot" style="background:${p.slot}"></div>
+        </div><span>${p.name}</span>`;
+      el.addEventListener('click', ()=>{
+        state.colors = {
+          ...state.colors, bg:p.bg, card:p.card, slot:p.slot, preset:p.name, text: p.text || null,
+          consonant: (p.cv && p.cv.consonant) || state.colors.consonant,
+          vowel: (p.cv && p.cv.vowel) || state.colors.vowel
+        };
+        applyColors();
+        saveColors();
+        renderAll();
+      });
+      presetGrid.appendChild(el);
+    });
+  }
+
+  /* ---------------- Persistence ---------------- */
+  function saveColors(){
+    try{ localStorage.setItem(K_COLORS, JSON.stringify(state.colors)); }catch(e){}
+  }
+  function loadColors(){
+    try{
+      const raw = localStorage.getItem(K_COLORS);
+      if(raw){ state.colors = JSON.parse(raw); }
+    }catch(e){}
+  }
+  function saveState(){
+    try{
+      localStorage.setItem(K_STATE, JSON.stringify({
+        letters: state.letters,
+        numBoxes: state.numBoxes,
+        placements: state.placements,
+        bankOrder: state.bankOrder
+      }));
+    }catch(e){}
+  }
+  function loadStateRaw(){
+    try{
+      const raw = localStorage.getItem(K_STATE);
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ return null; }
+  }
+  function clearStoredState(){
+    try{ localStorage.removeItem(K_STATE); }catch(e){}
+  }
+
+  /* ---------------- Rendering ---------------- */
+  function computeTileSize(){
+    // Fit tiles nicely depending on viewport, keep vertical flashcard ratio
+    const w = window.innerWidth, h = window.innerHeight;
+    const shortSide = Math.min(w,h);
+    const scale = state.colors.cardScale || 1;
+    let tw = Math.round(shortSide * 0.11 * scale);
+    tw = Math.max(40, Math.min(tw, 150));
+    const th = Math.round(tw * 1.38);
+    document.documentElement.style.setProperty('--tile-w', tw+'px');
+    document.documentElement.style.setProperty('--tile-h', th+'px');
+  }
+
+  function renderBoard(){
+    boardArea.innerHTML = '';
+    for(let i=0;i<state.numBoxes;i++){
+      const slot = document.createElement('div');
+      slot.className = 'slot';
+      slot.dataset.index = i;
+      const letterId = state.placements[i];
+      if(letterId){
+        slot.classList.add('filled');
+        const letterObj = state.letters.find(l=>l.id===letterId);
+        if(letterObj){
+          slot.appendChild(makeCard(letterObj));
+        } else {
+          delete state.placements[i];
+        }
+      }
+      boardArea.appendChild(slot);
+    }
+  }
+
+  function renderBank(){
+    letterBank.innerHTML = '';
+    if(state.letters.length === 0){
+      const msg = document.createElement('div');
+      msg.className = 'empty-msg';
+      msg.textContent = 'No letters yet — open Settings to add some.';
+      letterBank.appendChild(msg);
+      letterBank.style.height = '';
+      bankLabel.style.marginLeft = '';
+      return;
+    }
+    const groups = groupBank();
+    if(groups.length === 0){
+      const msg = document.createElement('div');
+      msg.className = 'empty-msg';
+      msg.textContent = 'All letters are on the board.';
+      letterBank.appendChild(msg);
+      layoutBank();
+      return;
+    }
+    groups.forEach(g=>{
+      letterBank.appendChild(makeBankStack(g));
+    });
+    layoutBank();
+  }
+
+  function isVowel(ch){
+    return /^[aeiou]/i.test(ch);
+  }
+
+  function makeCard(letterObj){
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.dataset.id = letterObj.id;
+    card.textContent = letterObj.char;
+    if(state.colors.cvMode){
+      const txt = isVowel(letterObj.char) ? (state.colors.vowel || '#E2574C') : (state.colors.consonant || '#5FAE5A');
+      card.style.background = '';
+      card.style.color = txt;
+    } else {
+      card.style.background = '';
+      card.style.color = '';
+    }
+    attachDrag(card);
+    return card;
+  }
+
+  function groupBank(){
+    if(!state.colors.stackMode){
+      return state.bankOrder
+        .filter(id=>state.letters.find(l=>l.id===id))
+        .map(id=>({ char: null, ids: [id] }));
+    }
+    const map = new Map();
+    const order = [];
+    state.bankOrder.forEach(id=>{
+      const obj = state.letters.find(l=>l.id===id);
+      if(!obj) return;
+      if(!map.has(obj.char)){ map.set(obj.char, []); order.push(obj.char); }
+      map.get(obj.char).push(id);
+    });
+    return order.map(ch=>({ char: ch, ids: map.get(ch) }));
+  }
+
+  function makeBankStack(group){
+    const obj = state.letters.find(l=>l.id===group.ids[0]);
+    const card = makeCard(obj);
+    if(group.ids.length > 1){
+      const badge = document.createElement('div');
+      badge.className = 'stack-badge';
+      badge.textContent = 'x' + group.ids.length;
+      card.appendChild(badge);
+    }
+    return card;
+  }
+
+  function renderAll(){
+    renderBoard();
+    renderBank();
+  }
+
+  function alignBankLabel(){
+    const align = state.colors.bankAlign || 'flex-start';
+    bankLabel.style.marginLeft = '';
+    bankLabel.style.textAlign = align === 'flex-end' ? 'right' : (align === 'center' ? 'center' : 'left');
+  }
+
+  function layoutBank(){
+    letterBank.style.flexWrap = 'wrap';
+    letterBank.style.overflowX = 'hidden';
+    letterBank.style.alignItems = '';
+    alignBankLabel();
+    const items = [...letterBank.querySelectorAll('.card')];
+    const rowH = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--tile-h')) || 86;
+    if(items.length === 0){
+      letterBank.style.height = rowH + 'px';
+      return;
+    }
+    letterBank.style.height = '';
+    requestAnimationFrame(()=>{
+      const gap = 10;
+      const tops = [...new Set(items.map(el=>Math.round(el.offsetTop)))];
+      const rows = tops.length;
+      if(rows <= 2){
+        letterBank.style.height = (rows*rowH + (rows-1)*gap) + 'px';
+      } else {
+        letterBank.style.flexWrap = 'nowrap';
+        letterBank.style.overflowX = 'auto';
+        letterBank.style.alignItems = 'center';
+        letterBank.style.height = (2*rowH + gap) + 'px';
+      }
+    });
+  }
+
+  /* ---------------- Drag & drop (Pointer Events) ---------------- */
+  let dragCtx = null;
+
+  function attachDrag(card){
+    card.addEventListener('pointerdown', onPointerDown, {passive:true});
+  }
+
+  function onPointerDown(e){
+    if(e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
+    const card = e.currentTarget;
+    const rect = card.getBoundingClientRect();
+    const originParent = card.parentElement;
+    const originSlotIndex = originParent && originParent.classList.contains('slot') ? Number(originParent.dataset.index) : null;
+
+    if(originParent && originParent.classList.contains('slot')){
+      originParent.classList.remove('filled'); // show the dashed box again while it's being picked up
+    }
+
+    if(originSlotIndex === null){
+      // picked up from the bank — pull this instance out of its stack now so the
+      // remaining count updates live behind the card while it's being dragged
+      const badge = card.querySelector('.stack-badge');
+      if(badge) badge.remove();
+      const bi = state.bankOrder.indexOf(card.dataset.id);
+      if(bi !== -1) state.bankOrder.splice(bi,1);
+      renderBank();
+    }
+
+    dragCtx = {
+      card, originParent, originSlotIndex,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+      w: rect.width, h: rect.height,
+      lastX: e.clientX, lastY: e.clientY,
+      slotRects: [...boardArea.querySelectorAll('.slot')].map(s=>({el:s, rect:s.getBoundingClientRect()})),
+      bankRect: letterBank.getBoundingClientRect(),
+      moved:false
+    };
+
+    document.body.appendChild(card);
+    card.classList.add('dragging');
+    card.style.width = dragCtx.w+'px';
+    card.style.height = dragCtx.h+'px';
+    positionDragCard(e.clientX, e.clientY);
+
+    card.setPointerCapture(e.pointerId);
+    card.addEventListener('pointermove', onPointerMove);
+    card.addEventListener('pointerup', onPointerUp);
+    card.addEventListener('pointercancel', onPointerUp);
+  }
+
+  let rafPending = false;
+  function onPointerMove(e){
+    if(!dragCtx) return;
+    dragCtx.lastX = e.clientX;
+    dragCtx.lastY = e.clientY;
+    dragCtx.moved = true;
+    if(!rafPending){
+      rafPending = true;
+      requestAnimationFrame(()=>{
+        rafPending = false;
+        if(!dragCtx) return;
+        positionDragCard(dragCtx.lastX, dragCtx.lastY);
+        updateHotSlot(dragCtx.lastX, dragCtx.lastY);
+      });
+    }
+  }
+
+  function positionDragCard(x,y){
+    const card = dragCtx.card;
+    card.style.left = (x - dragCtx.offsetX) + 'px';
+    card.style.top = (y - dragCtx.offsetY) + 'px';
+  }
+
+  let currentHotSlot = null;
+  function updateHotSlot(x,y){
+    let found = null;
+    let bestDist = Infinity;
+    const threshold = Math.max(dragCtx.w, dragCtx.h) * 0.75;
+    for(const s of dragCtx.slotRects){
+      const cx = s.rect.left + s.rect.width/2;
+      const cy = s.rect.top + s.rect.height/2;
+      const dist = Math.hypot(x-cx, y-cy);
+      if(dist < threshold && dist < bestDist){
+        // only consider empty slots (unless it's the origin slot)
+        const idx = Number(s.el.dataset.index);
+        const occupied = state.placements[idx] !== undefined;
+        if(!occupied || idx === dragCtx.originSlotIndex){
+          bestDist = dist; found = s.el;
+        }
+      }
+    }
+    if(currentHotSlot && currentHotSlot !== found) currentHotSlot.classList.remove('hot');
+    if(found) found.classList.add('hot');
+    currentHotSlot = found;
+  }
+
+  function onPointerUp(e){
+    if(!dragCtx) return;
+    const card = dragCtx.card;
+    card.releasePointerCapture(e.pointerId);
+    card.removeEventListener('pointermove', onPointerMove);
+    card.removeEventListener('pointerup', onPointerUp);
+    card.removeEventListener('pointercancel', onPointerUp);
+
+    const x = dragCtx.lastX, y = dragCtx.lastY;
+    const letterId = card.dataset.id;
+
+    // clear old placement if it was in a slot
+    if(dragCtx.originSlotIndex !== null){
+      delete state.placements[dragCtx.originSlotIndex];
+    }
+
+    let placedInSlot = null;
+    if(currentHotSlot){
+      placedInSlot = Number(currentHotSlot.dataset.index);
+    } else {
+      // check if dropped over bank area (returns to bank) or over board generally
+      const bankRect = letterBank.getBoundingClientRect();
+      const overBank = y >= bankRect.top - 20;
+      if(!overBank){
+        // try nearest empty slot within a looser radius as fallback
+        let best=null, bestDist=Infinity;
+        for(const s of dragCtx.slotRects){
+          const idx = Number(s.el.dataset.index);
+          if(state.placements[idx] !== undefined) continue;
+          const cx = s.rect.left+s.rect.width/2, cy = s.rect.top+s.rect.height/2;
+          const d = Math.hypot(x-cx,y-cy);
+          if(d<bestDist){bestDist=d; best=idx;}
+        }
+        if(best!==null && bestDist < Math.max(dragCtx.w,dragCtx.h)*1.6){
+          placedInSlot = best;
+        }
+      }
+    }
+
+    if(placedInSlot !== null){
+      state.placements[placedInSlot] = letterId;
+      // no longer sits in the bank
+      const bi = state.bankOrder.indexOf(letterId);
+      if(bi !== -1) state.bankOrder.splice(bi,1);
+    } else {
+      // returning to (or reordering within) the bank — land it at the dropped position
+      insertIntoBankOrder(letterId, x, y);
+    }
+
+    if(currentHotSlot){ currentHotSlot.classList.remove('hot'); currentHotSlot = null; }
+
+    // cleanup dragged element styles
+    card.classList.remove('dragging');
+    card.style.width = '';
+    card.style.height = '';
+    card.style.left = '';
+    card.style.top = '';
+    card.remove(); // renderAll() rebuilds fresh cards, so drop the old DOM node
+
+    dragCtx = null;
+    renderAll();
+    saveState();
+  }
+
+  function insertIntoBankOrder(letterId, dropX, dropY){
+    const existing = state.bankOrder.indexOf(letterId);
+    if(existing !== -1) state.bankOrder.splice(existing,1);
+
+    const cards = [...letterBank.querySelectorAll('.card')];
+    if(cards.length === 0){ state.bankOrder.push(letterId); return; }
+
+    const rects = cards.map(c=>c.getBoundingClientRect());
+    let rowTop = rects[0].top, bestRowDist = Infinity;
+    rects.forEach(r=>{
+      const cy = r.top + r.height/2;
+      const d = Math.abs(dropY - cy);
+      if(d < bestRowDist){ bestRowDist = d; rowTop = r.top; }
+    });
+    const rowTolerance = Math.max(...rects.map(r=>r.height)) * 0.6;
+
+    // find the id of the card we should land before (not a raw index —
+    // a stacked card can represent more than one id in bankOrder, so
+    // counting visual cards and indexing into the flat array can drift)
+    let anchorId = null;
+    for(let i=0;i<cards.length;i++){
+      const r = rects[i];
+      const sameRow = Math.abs(r.top - rowTop) < rowTolerance;
+      if(sameRow && dropX < r.left + r.width/2){ anchorId = cards[i].dataset.id; break; }
+      if(!sameRow && r.top > rowTop){ anchorId = cards[i].dataset.id; break; }
+    }
+
+    if(anchorId !== null){
+      const anchorIndex = state.bankOrder.indexOf(anchorId);
+      if(anchorIndex !== -1){
+        state.bankOrder.splice(anchorIndex, 0, letterId);
+        return;
+      }
+    }
+    state.bankOrder.push(letterId);
+  }
+
+  /* ---------------- Settings actions ---------------- */
+  function parseLetterInput(raw){
+    raw = raw.trim();
+    if(!raw) return [];
+    let parts;
+    if(raw.includes(',')){
+      parts = raw.split(',').map(s=>s.trim()).filter(Boolean);
+    } else {
+      parts = raw.replace(/\s+/g,'').split('');
+    }
+    return parts;
+  }
+
+  function setLettersFromInput(){
+    const parts = parseLetterInput(letterInput.value);
+    if(parts.length === 0) return;
+    state.letters = parts.map(ch=>({id: nextId(), char: ch}));
+    state.placements = {};
+    state.bankOrder = state.letters.map(l=>l.id);
+    renderAll();
+    saveState();
+  }
+
+  function setNumBoxes(){
+    let n = parseInt(numBoxesInput.value,10);
+    if(isNaN(n) || n < 1) n = 1;
+    if(n > 30) n = 30;
+    numBoxesInput.value = n;
+    // drop placements beyond new range, returning those letters to the bank
+    Object.keys(state.placements).forEach(k=>{
+      if(Number(k) >= n){
+        const letterId = state.placements[k];
+        if(letterId && !state.bankOrder.includes(letterId)) state.bankOrder.push(letterId);
+        delete state.placements[k];
+      }
+    });
+    state.numBoxes = n;
+    renderAll();
+    saveState();
+  }
+
+  function clearBoardOnly(){
+    Object.values(state.placements).forEach(id=>{
+      if(!state.bankOrder.includes(id)) state.bankOrder.push(id);
+    });
+    state.placements = {};
+    renderAll();
+    saveState();
+  }
+
+  function removeAllLetters(){
+    state.letters = [];
+    state.placements = {};
+    state.bankOrder = [];
+    letterInput.value = '';
+    renderAll();
+    saveState();
+  }
+
+  function resetAllSettings(){
+    state.colors = { bg: PRESETS[0].bg, card: PRESETS[0].card, slot: PRESETS[0].slot, preset: PRESETS[0].name, font: 'Nunito', cardScale: 1, cvMode:false, consonant: PRESETS[0].cv.consonant, vowel: PRESETS[0].cv.vowel, bankAlign: 'flex-start', stackMode: true };
+    state.letters = [];
+    state.placements = {};
+    state.bankOrder = [];
+    state.numBoxes = 6;
+    numBoxesInput.value = 6;
+    letterInput.value = '';
+    applyColors();
+    saveColors();
+    renderAll();
+    clearStoredState();
+  }
+
+  /* ---------------- Settings panel open/close ---------------- */
+  function openSettings(){
+    settingsPanel.classList.add('show');
+    overlay.classList.add('show');
+  }
+  function closeSettings(){
+    settingsPanel.classList.remove('show');
+    overlay.classList.remove('show');
+  }
+
+  /* ---------------- Present mode ---------------- */
+  function enterPresent(){
+    document.body.classList.add('present');
+    const el = document.documentElement;
+    const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+    if(req){ req.call(el).catch(()=>{}); }
+    computeTileSize();
+  }
+  function exitPresent(){
+    document.body.classList.remove('present');
+    if(document.fullscreenElement || document.webkitFullscreenElement){
+      const exit = document.exitFullscreen || document.webkitExitFullscreen;
+      if(exit) exit.call(document).catch(()=>{});
+    }
+    computeTileSize();
+  }
+  document.addEventListener('fullscreenchange', ()=>{
+    if(!document.fullscreenElement){ document.body.classList.remove('present'); computeTileSize(); }
+  });
+
+  /* ---------------- Confirm modal for saved letters ---------------- */
+  function showConfirm(savedState){
+    confirmModal.classList.add('show');
+    document.getElementById('confirmYes').onclick = ()=>{
+      state.letters = savedState.letters || [];
+      state.numBoxes = savedState.numBoxes || 6;
+      state.placements = savedState.placements || {};
+      state.bankOrder = savedState.bankOrder || state.letters.map(l=>l.id);
+      numBoxesInput.value = state.numBoxes;
+      renderAll();
+      confirmModal.classList.remove('show');
+    };
+    document.getElementById('confirmNo').onclick = ()=>{
+      clearStoredState();
+      confirmModal.classList.remove('show');
+    };
+  }
+
+  /* ---------------- Wire up events ---------------- */
+  document.getElementById('settingsBtn').addEventListener('click', openSettings);
+  document.getElementById('floatSettingsBtn').addEventListener('click', openSettings);
+  document.getElementById('closeSettingsBtn').addEventListener('click', closeSettings);
+  overlay.addEventListener('click', closeSettings);
+  document.getElementById('presentBtn').addEventListener('click', enterPresent);
+  document.getElementById('exitPresentBtn').addEventListener('click', exitPresent);
+  document.getElementById('clearBtn').addEventListener('click', clearBoardOnly);
+  document.getElementById('clearBtnMain').addEventListener('click', clearBoardOnly);
+  document.getElementById('applyLettersBtn').addEventListener('click', setLettersFromInput);
+  document.getElementById('applyBoxesBtn').addEventListener('click', setNumBoxes);
+  document.getElementById('removeAllBtn').addEventListener('click', removeAllLetters);
+  document.getElementById('resetAllBtn').addEventListener('click', resetAllSettings);
+
+  cvToggleBtn.addEventListener('click', ()=>{
+    state.colors = { ...state.colors, cvMode: !state.colors.cvMode };
+    applyColors();
+    saveColors();
+    renderAll();
+  });
+
+  stackToggleBtn.addEventListener('click', ()=>{
+    state.colors = { ...state.colors, stackMode: !state.colors.stackMode };
+    applyColors();
+    saveColors();
+    renderAll();
+  });
+
+  cardSizeInput.addEventListener('input', ()=>{
+    state.colors = { ...state.colors, cardScale: parseFloat(cardSizeInput.value) };
+    computeTileSize();
+    layoutBank();
+  });
+  cardSizeInput.addEventListener('change', saveColors);
+
+  bankAlignRow.querySelectorAll('button').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      state.colors = { ...state.colors, bankAlign: btn.dataset.align };
+      applyColors();
+      saveColors();
+    });
+  });
+
+  window.addEventListener('resize', ()=>{ computeTileSize(); layoutBank(); });
+
+  /* ---------------- Init ---------------- */
+  function init(){
+    buildPresetGrid();
+    buildFontGrid();
+    loadColors();
+    applyColors();
+    computeTileSize();
+
+    const saved = loadStateRaw();
+    if(saved && Array.isArray(saved.letters) && saved.letters.length > 0){
+      state.numBoxes = saved.numBoxes || 10;
+      numBoxesInput.value = state.numBoxes;
+      // reassign ids into counter to avoid collisions with future additions
+      let maxN = 0;
+      saved.letters.forEach(l=>{
+        const n = parseInt(String(l.id).replace('l',''),10);
+        if(!isNaN(n) && n>maxN) maxN = n;
+      });
+      idCounter = maxN + 1;
+      renderAll(); // render empty board first (no letters shown until confirmed)
+      showConfirm(saved);
+    } else {
+      renderAll();
+    }
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>
