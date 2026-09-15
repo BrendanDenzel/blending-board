@@ -358,7 +358,7 @@
 
     <div class="sp-section">
       <label class="sp-title" for="letterInput">Activity letters</label>
-      <div class="sp-hint">Type letters or word groups. Separate with commas for blends like sh, ch, th — or just type a word to split it into single letters.</div>
+      <div class="sp-hint">Type letters or word groups. Separate with commas for letters or blends like sh, ch, th. You can also type a word to split it into single letters.</div>
       <input type="text" id="letterInput" placeholder="e.g. c, a, t, sh, ch">
       <div class="row" style="margin-top:10px;">
         <button class="btn btn-primary" id="applyLettersBtn">Update letter bank</button>
@@ -433,12 +433,12 @@
 
   /* ---------------- Presets ---------------- */
     const PRESETS = [
-    { name:'Forest',    bg:'#EFF6EC', card:'#78B26A', slot:'#A9CE9E', cv:{consonant:'#3F7A34', vowel:'#C1341F'} },
+    { name:'Forest',    bg:'#EFF6EC', card:'#78B26A', slot:'#A9CE9E', cv:{consonant:'#64ed86', vowel:'#C1341F'} },
     { name:'Sunshine',  bg:'#FFF6E0', card:'#FFC94D', slot:'#F2C57C', text:'#ffffff', cv:{consonant:'#2F7A34', vowel:'#B02E1E'} },
-    { name:'Ocean',     bg:'#E7F6F8', card:'#4FB6C9', slot:'#8FD3E0', text:'#ffffff', cv:{consonant:'#2F6B45', vowel:'#A3301C'} },
+    { name:'Ocean',     bg:'#E7F6F8', card:'#4FB6C9', slot:'#8FD3E0', text:'#ffffff', cv:{consonant:'#268f15', vowel:'#c91e12'} },
     { name:'Midnight',  bg:'#2C3E66', card:'#FFFFFF', slot:'#8FA5C7', cv:{consonant:'#4E9F63', vowel:'#C1341F'} },
     { name:'Slate',     bg:'#425066', card:'#FFFFFF', slot:'#9FB0C2', cv:{consonant:'#42a15a', vowel:'#bf1815'} },
-    { name:'Ember',     bg:'#3A2318', card:'#FFFFFF', slot:'#C9A98B', cv:{consonant:'#4E9463', vowel:'#B5321C'} },
+    { name:'Twilight',  bg:'#3c2d5e', card:'#FFFFFF', slot:'#B8A6E0', cv:{consonant:'#2E9E8E', vowel:'#bf1815'} },
   ];
 
   const FONTS = [
@@ -574,6 +574,20 @@
       const raw = localStorage.getItem(K_COLORS);
       if(raw){ state.colors = JSON.parse(raw); }
     }catch(e){}
+    syncPresetColors();
+  }
+
+  function syncPresetColors(){
+    if(!state.colors) return;
+    let preset = PRESETS.find(p=>p.name === state.colors.preset);
+    if(!preset) preset = PRESETS[0]; // saved preset no longer exists (renamed/removed) — fall back to default
+    state.colors = {
+      ...state.colors,
+      preset: preset.name,
+      bg: preset.bg, card: preset.card, slot: preset.slot, text: preset.text || null,
+      consonant: (preset.cv && preset.cv.consonant) || state.colors.consonant,
+      vowel: (preset.cv && preset.cv.vowel) || state.colors.vowel
+    };
   }
   function saveState(){
     try{
@@ -1052,6 +1066,7 @@
       state.placements = savedState.placements || {};
       state.bankOrder = savedState.bankOrder || state.letters.map(l=>l.id);
       numBoxesInput.value = state.numBoxes;
+      letterInput.value = state.letters.map(l=>l.char).join(', ');
       renderAll();
       confirmModal.classList.remove('show');
     };
