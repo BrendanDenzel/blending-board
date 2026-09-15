@@ -757,14 +757,32 @@
   }
 
   /* ---------------- Drag & drop (Pointer Events) ---------------- */
-  let dragCtx = null;
+  // Keyed by pointerId so two simultaneous touches (e.g. two kids on a shared
+  // touchscreen) can't overwrite each other's drag state.
+  let dragCtxMap = new Map();
 
   function attachDrag(card){
     card.addEventListener('pointerdown', onPointerDown, {passive:true});
   }
 
+  function cleanupStrayDragCards(){
+    // Safety net: if a previous drag ever got orphaned (interrupted touch,
+    // missed up/cancel event), sweep up any leftover "dragging" card that no
+    // active pointer owns and return it to the bank instead of leaving it stuck.
+    document.querySelectorAll('body > .card.dragging').forEach(el=>{
+      let stillActive = false;
+      dragCtxMap.forEach(ctx=>{ if(ctx.card === el) stillActive = true; });
+      if(!stillActive){
+        const id = el.dataset.id;
+        if(id && !state.bankOrder.includes(id)) state.bankOrder.push(id);
+        el.remove();
+      }
+    });
+  }
+
   function onPointerDown(e){
     if(e.button !== undefined && e.button !== 0 && e.pointerType === 'mouse') return;
+    cleanupStrayDragCards();
     const card = e.currentTarget;
     const rect = card.getBoundingClientRect();
     const originParent = card.parentElement;
@@ -784,7 +802,7 @@
       renderBank();
     }
 
-    dragCtx = {
+    const ctx = {
       card, originParent, originSlotIndex,
       offsetX: e.clientX - rect.left,
       offsetY: e.clientY - rect.top,
@@ -792,50 +810,52 @@
       lastX: e.clientX, lastY: e.clientY,
       slotRects: [...boardArea.querySelectorAll('.slot')].map(s=>({el:s, rect:s.getBoundingClientRect()})),
       bankRect: letterBank.getBoundingClientRect(),
-      moved:false
+      moved:false,
+      hotSlot: null,
+      rafPending: false
     };
+    dragCtxMap.set(e.pointerId, ctx);
 
     document.body.appendChild(card);
     card.classList.add('dragging');
-    card.style.width = dragCtx.w+'px';
-    card.style.height = dragCtx.h+'px';
-    positionDragCard(e.clientX, e.clientY);
+    card.style.width = ctx.w+'px';
+    card.style.height = ctx.h+'px';
+    positionDragCard(ctx, e.clientX, e.clientY);
 
-    card.setPointerCapture(e.pointerId);
+    try{ card.setPointerCapture(e.pointerId); }catch(err){}
     card.addEventListener('pointermove', onPointerMove);
     card.addEventListener('pointerup', onPointerUp);
     card.addEventListener('pointercancel', onPointerUp);
   }
 
-  let rafPending = false;
   function onPointerMove(e){
-    if(!dragCtx) return;
-    dragCtx.lastX = e.clientX;
-    dragCtx.lastY = e.clientY;
-    dragCtx.moved = true;
-    if(!rafPending){
-      rafPending = true;
+    const ctx = dragCtxMap.get(e.pointerId);
+    if(!ctx) return;
+    ctx.lastX = e.clientX;
+    ctx.lastY = e.clientY;
+    ctx.moved = true;
+    if(!ctx.rafPending){
+      ctx.rafPending = true;
       requestAnimationFrame(()=>{
-        rafPending = false;
-        if(!dragCtx) return;
-        positionDragCard(dragCtx.lastX, dragCtx.lastY);
-        updateHotSlot(dragCtx.lastX, dragCtx.lastY);
+        ctx.rafPending = false;
+        if(!dragCtxMap.has(e.pointerId)) return;
+        positionDragCard(ctx, ctx.lastX, ctx.lastY);
+        updateHotSlot(ctx, ctx.lastX, ctx.lastY);
       });
     }
   }
 
-  function positionDragCard(x,y){
-    const card = dragCtx.card;
-    card.style.left = (x - dragCtx.offsetX) + 'px';
-    card.style.top = (y - dragCtx.offsetY) + 'px';
+  function positionDragCard(ctx, x, y){
+    const card = ctx.card;
+    card.style.left = (x - ctx.offsetX) + 'px';
+    card.style.top = (y - ctx.offsetY) + 'px';
   }
 
-  let currentHotSlot = null;
-  function updateHotSlot(x,y){
+  function updateHotSlot(ctx, x, y){
     let found = null;
     let bestDist = Infinity;
-    const threshold = Math.max(dragCtx.w, dragCtx.h) * 0.75;
-    for(const s of dragCtx.slotRects){
+    const threshold = Math.max(ctx.w, ctx.h) * 0.75;
+    for(const s of ctx.slotRects){
       const cx = s.rect.left + s.rect.width/2;
       const cy = s.rect.top + s.rect.height/2;
       const dist = Math.hypot(x-cx, y-cy);
@@ -843,35 +863,36 @@
         // only consider empty slots (unless it's the origin slot)
         const idx = Number(s.el.dataset.index);
         const occupied = state.placements[idx] !== undefined;
-        if(!occupied || idx === dragCtx.originSlotIndex){
+        if(!occupied || idx === ctx.originSlotIndex){
           bestDist = dist; found = s.el;
         }
       }
     }
-    if(currentHotSlot && currentHotSlot !== found) currentHotSlot.classList.remove('hot');
+    if(ctx.hotSlot && ctx.hotSlot !== found) ctx.hotSlot.classList.remove('hot');
     if(found) found.classList.add('hot');
-    currentHotSlot = found;
+    ctx.hotSlot = found;
   }
 
   function onPointerUp(e){
-    if(!dragCtx) return;
-    const card = dragCtx.card;
-    card.releasePointerCapture(e.pointerId);
+    const ctx = dragCtxMap.get(e.pointerId);
+    if(!ctx) return;
+    const card = ctx.card;
+    try{ card.releasePointerCapture(e.pointerId); }catch(err){}
     card.removeEventListener('pointermove', onPointerMove);
     card.removeEventListener('pointerup', onPointerUp);
     card.removeEventListener('pointercancel', onPointerUp);
 
-    const x = dragCtx.lastX, y = dragCtx.lastY;
+    const x = ctx.lastX, y = ctx.lastY;
     const letterId = card.dataset.id;
 
     // clear old placement if it was in a slot
-    if(dragCtx.originSlotIndex !== null){
-      delete state.placements[dragCtx.originSlotIndex];
+    if(ctx.originSlotIndex !== null){
+      delete state.placements[ctx.originSlotIndex];
     }
 
     let placedInSlot = null;
-    if(currentHotSlot){
-      placedInSlot = Number(currentHotSlot.dataset.index);
+    if(ctx.hotSlot){
+      placedInSlot = Number(ctx.hotSlot.dataset.index);
     } else {
       // check if dropped over bank area (returns to bank) or over board generally
       const bankRect = letterBank.getBoundingClientRect();
@@ -879,14 +900,14 @@
       if(!overBank){
         // try nearest empty slot within a looser radius as fallback
         let best=null, bestDist=Infinity;
-        for(const s of dragCtx.slotRects){
+        for(const s of ctx.slotRects){
           const idx = Number(s.el.dataset.index);
           if(state.placements[idx] !== undefined) continue;
           const cx = s.rect.left+s.rect.width/2, cy = s.rect.top+s.rect.height/2;
           const d = Math.hypot(x-cx,y-cy);
           if(d<bestDist){bestDist=d; best=idx;}
         }
-        if(best!==null && bestDist < Math.max(dragCtx.w,dragCtx.h)*1.6){
+        if(best!==null && bestDist < Math.max(ctx.w,ctx.h)*1.6){
           placedInSlot = best;
         }
       }
@@ -902,7 +923,7 @@
       insertIntoBankOrder(letterId, x, y);
     }
 
-    if(currentHotSlot){ currentHotSlot.classList.remove('hot'); currentHotSlot = null; }
+    if(ctx.hotSlot){ ctx.hotSlot.classList.remove('hot'); ctx.hotSlot = null; }
 
     // cleanup dragged element styles
     card.classList.remove('dragging');
@@ -912,7 +933,7 @@
     card.style.top = '';
     card.remove(); // renderAll() rebuilds fresh cards, so drop the old DOM node
 
-    dragCtx = null;
+    dragCtxMap.delete(e.pointerId);
     renderAll();
     saveState();
   }
